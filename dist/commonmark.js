@@ -1,4 +1,5 @@
-(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.commonmark = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+/* commonmark 0.29 https://github.com/CommonMark/commonmark.js @license BSD3 */
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.commonmark = f()}})(function(){var define,module,exports;return (function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 "use strict";
 
 var Node = require('./node');
@@ -24,7 +25,7 @@ var reHtmlBlockOpen = [
    /^<[?]/,
    /^<![A-Z]/,
    /^<!\[CDATA\[/,
-   /^<[/]?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[123456]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|meta|nav|noframes|ol|optgroup|option|p|param|section|source|title|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|[/]?[>]|$)/i,
+   /^<[/]?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[123456]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|section|source|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:\s|[/]?[>]|$)/i,
     new RegExp('^(?:' + OPENTAG + '|' + CLOSETAG + ')\\s*$', 'i')
 ];
 
@@ -49,7 +50,7 @@ var reOrderedListMarker = /^(\d{1,9})([.)])/;
 
 var reATXHeadingMarker = /^#{1,6}(?:[ \t]+|$)/;
 
-var reCodeFence = /^`{3,}(?!.*`)|^~{3,}(?!.*~)/;
+var reCodeFence = /^`{3,}(?!.*`)|^~{3,}/;
 
 var reClosingCodeFence = /^(?:`{3,}|~{3,})(?= *$)/;
 
@@ -86,9 +87,12 @@ var endsWithBlankLine = function(block) {
             return true;
         }
         var t = block.type;
-        if (t === 'list' || t === 'item') {
+        if (!block._lastLineChecked &&
+            (t === 'list' || t === 'item')) {
+            block._lastLineChecked = true;
             block = block._lastChild;
         } else {
+            block._lastLineChecked = true;
             break;
         }
     }
@@ -138,6 +142,9 @@ var parseListMarker = function(parser, container) {
                  delimiter: null,
                  padding: null,
                  markerOffset: parser.indent };
+    if (parser.indent >= 4) {
+        return null;
+    }
     if ((match = rest.match(reBulletListMarker))) {
         data.type = 'bullet';
         data.bulletChar = match[0][0];
@@ -320,6 +327,7 @@ var blocks = {
                     ln.slice(parser.nextNonspace).match(reClosingCodeFence));
                 if (match && match[0].length >= container._fenceLength) {
                     // closing fence - we're at end of line, so we can return
+                    parser.lastLineLength = match[0].length;
                     parser.finalize(container, parser.lineNumber);
                     return 2;
                 } else {
@@ -492,14 +500,27 @@ var blockStarts = [
             container.type === 'paragraph' &&
                    ((match = parser.currentLine.slice(parser.nextNonspace).match(reSetextHeadingLine)))) {
             parser.closeUnmatchedBlocks();
-            var heading = new Node('heading', container.sourcepos);
-            heading.level = match[0][0] === '=' ? 1 : 2;
-            heading._string_content = container._string_content;
-            container.insertAfter(heading);
-            container.unlink();
-            parser.tip = heading;
-            parser.advanceOffset(parser.currentLine.length - parser.offset, false);
-            return 2;
+            // resolve reference link definitiosn
+            var pos;
+            while (peek(container._string_content, 0) === C_OPEN_BRACKET &&
+                   (pos =
+                    parser.inlineParser.parseReference(
+                        container._string_content, parser.refmap))) {
+                container._string_content =
+                    container._string_content.slice(pos);
+            }
+            if (container._string_content.length > 0) {
+              var heading = new Node('heading', container.sourcepos);
+              heading.level = match[0][0] === '=' ? 1 : 2;
+              heading._string_content = container._string_content;
+              container.insertAfter(heading);
+              container.unlink();
+              parser.tip = heading;
+              parser.advanceOffset(parser.currentLine.length - parser.offset, false);
+              return 2;
+            } else {
+              return 0;
+            }
         } else {
             return 0;
         }
@@ -655,7 +676,6 @@ var incorporateLine = function(ln) {
             all_matched = false;
             break;
         case 2: // we've hit end of line for fenced code close and can return
-            this.lastLineLength = ln.length;
             return;
         default:
             throw 'continue returned illegal value, must be 0, 1, or 2';
@@ -751,6 +771,7 @@ var incorporateLine = function(ln) {
                 container._htmlBlockType >= 1 &&
                 container._htmlBlockType <= 5 &&
                 reHtmlBlockClose[container._htmlBlockType].test(this.currentLine.slice(this.offset))) {
+                this.lastLineLength = ln.length;
                 this.finalize(container, this.lineNumber);
             }
 
@@ -877,13 +898,12 @@ module.exports = Parser;
 "use strict";
 
 var encode = require('mdurl/encode');
-var decode = require('mdurl/decode');
 
 var C_BACKSLASH = 92;
 
 var decodeHTML = require('entities').decodeHTML;
 
-var ENTITY = "&(?:#x[a-f0-9]{1,8}|#[0-9]{1,8}|[a-z][a-z0-9]{1,31});";
+var ENTITY = "&(?:#x[a-f0-9]{1,6}|#[0-9]{1,7}|[a-z][a-z0-9]{1,31});";
 
 var TAGNAME = '[A-Za-z][A-Za-z0-9-]*';
 var ATTRIBUTENAME = '[a-zA-Z_:][a-zA-Z0-9:._-]*';
@@ -913,8 +933,6 @@ var XMLSPECIAL = '[&<>"]';
 
 var reXmlSpecial = new RegExp(XMLSPECIAL, 'g');
 
-var reXmlSpecialOrEntity = new RegExp(ENTITY + '|' + XMLSPECIAL, 'gi');
-
 var unescapeChar = function(s) {
     if (s.charCodeAt(0) === C_BACKSLASH) {
         return s.charAt(1);
@@ -934,7 +952,7 @@ var unescapeString = function(s) {
 
 var normalizeURI = function(uri) {
     try {
-        return encode(decode(uri));
+        return encode(uri);
     }
     catch(err) {
         return uri;
@@ -956,13 +974,9 @@ var replaceUnsafeChar = function(s) {
     }
 };
 
-var escapeXml = function(s, preserve_entities) {
+var escapeXml = function(s) {
     if (reXmlSpecial.test(s)) {
-        if (preserve_entities) {
-            return s.replace(reXmlSpecialOrEntity, replaceUnsafeChar);
-        } else {
-            return s.replace(reXmlSpecial, replaceUnsafeChar);
-        }
+        return s.replace(reXmlSpecial, replaceUnsafeChar);
     } else {
         return s;
     }
@@ -978,7 +992,7 @@ module.exports = { unescapeString: unescapeString,
                    ESCAPABLE: ESCAPABLE
                  };
 
-},{"entities":11,"mdurl/decode":19,"mdurl/encode":20}],3:[function(require,module,exports){
+},{"entities":11,"mdurl/encode":19}],3:[function(require,module,exports){
 "use strict";
 
 // derived from https://github.com/mathiasbynens/String.fromCodePoint
@@ -1055,10 +1069,11 @@ if (String.fromCodePoint) {
 
 module.exports.Node = require('./node');
 module.exports.Parser = require('./blocks');
+module.exports.Renderer = require('./render/renderer');
 module.exports.HtmlRenderer = require('./render/html');
 module.exports.XmlRenderer = require('./render/xml');
 
-},{"./blocks":1,"./node":6,"./render/html":8,"./render/xml":10}],5:[function(require,module,exports){
+},{"./blocks":1,"./node":6,"./render/html":8,"./render/renderer":9,"./render/xml":10}],5:[function(require,module,exports){
 "use strict";
 
 var Node = require('./node');
@@ -1097,17 +1112,16 @@ var ESCAPED_CHAR = '\\\\' + ESCAPABLE;
 var ENTITY = common.ENTITY;
 var reHtmlTag = common.reHtmlTag;
 
-var rePunctuation = new RegExp(/[!"#$%&'()*+,\-./:;<=>?@\[\]^_`{|}~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166D\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E42\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]|\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD801\uDD6F|\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD805[\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDF3C-\uDF3E]|\uD809[\uDC70-\uDC74]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]|\uD82F\uDC9F|\uD836[\uDE87-\uDE8B]/);
+var rePunctuation = new RegExp(/[!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~\xA1\xA7\xAB\xB6\xB7\xBB\xBF\u037E\u0387\u055A-\u055F\u0589\u058A\u05BE\u05C0\u05C3\u05C6\u05F3\u05F4\u0609\u060A\u060C\u060D\u061B\u061E\u061F\u066A-\u066D\u06D4\u0700-\u070D\u07F7-\u07F9\u0830-\u083E\u085E\u0964\u0965\u0970\u0AF0\u0DF4\u0E4F\u0E5A\u0E5B\u0F04-\u0F12\u0F14\u0F3A-\u0F3D\u0F85\u0FD0-\u0FD4\u0FD9\u0FDA\u104A-\u104F\u10FB\u1360-\u1368\u1400\u166D\u166E\u169B\u169C\u16EB-\u16ED\u1735\u1736\u17D4-\u17D6\u17D8-\u17DA\u1800-\u180A\u1944\u1945\u1A1E\u1A1F\u1AA0-\u1AA6\u1AA8-\u1AAD\u1B5A-\u1B60\u1BFC-\u1BFF\u1C3B-\u1C3F\u1C7E\u1C7F\u1CC0-\u1CC7\u1CD3\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205E\u207D\u207E\u208D\u208E\u2308-\u230B\u2329\u232A\u2768-\u2775\u27C5\u27C6\u27E6-\u27EF\u2983-\u2998\u29D8-\u29DB\u29FC\u29FD\u2CF9-\u2CFC\u2CFE\u2CFF\u2D70\u2E00-\u2E2E\u2E30-\u2E42\u3001-\u3003\u3008-\u3011\u3014-\u301F\u3030\u303D\u30A0\u30FB\uA4FE\uA4FF\uA60D-\uA60F\uA673\uA67E\uA6F2-\uA6F7\uA874-\uA877\uA8CE\uA8CF\uA8F8-\uA8FA\uA8FC\uA92E\uA92F\uA95F\uA9C1-\uA9CD\uA9DE\uA9DF\uAA5C-\uAA5F\uAADE\uAADF\uAAF0\uAAF1\uABEB\uFD3E\uFD3F\uFE10-\uFE19\uFE30-\uFE52\uFE54-\uFE61\uFE63\uFE68\uFE6A\uFE6B\uFF01-\uFF03\uFF05-\uFF0A\uFF0C-\uFF0F\uFF1A\uFF1B\uFF1F\uFF20\uFF3B-\uFF3D\uFF3F\uFF5B\uFF5D\uFF5F-\uFF65]|\uD800[\uDD00-\uDD02\uDF9F\uDFD0]|\uD801\uDD6F|\uD802[\uDC57\uDD1F\uDD3F\uDE50-\uDE58\uDE7F\uDEF0-\uDEF6\uDF39-\uDF3F\uDF99-\uDF9C]|\uD804[\uDC47-\uDC4D\uDCBB\uDCBC\uDCBE-\uDCC1\uDD40-\uDD43\uDD74\uDD75\uDDC5-\uDDC9\uDDCD\uDDDB\uDDDD-\uDDDF\uDE38-\uDE3D\uDEA9]|\uD805[\uDCC6\uDDC1-\uDDD7\uDE41-\uDE43\uDF3C-\uDF3E]|\uD809[\uDC70-\uDC74]|\uD81A[\uDE6E\uDE6F\uDEF5\uDF37-\uDF3B\uDF44]|\uD82F\uDC9F|\uD836[\uDE87-\uDE8B]/);
 
 var reLinkTitle = new RegExp(
     '^(?:"(' + ESCAPED_CHAR + '|[^"\\x00])*"' +
         '|' +
         '\'(' + ESCAPED_CHAR + '|[^\'\\x00])*\'' +
         '|' +
-        '\\((' + ESCAPED_CHAR + '|[^)\\x00])*\\))');
+        '\\((' + ESCAPED_CHAR + '|[^()\\x00])*\\))');
 
-var reLinkDestinationBraces = new RegExp(
-    '^(?:[<](?:[^ <>\\t\\n\\\\\\x00]' + '|' + ESCAPED_CHAR + '|' + '\\\\)*[>])');
+var reLinkDestinationBraces = /^(?:<(?:[^<>\n\\\x00]|\\.)*>)/;
 
 var reEscapable = new RegExp('^' + ESCAPABLE);
 
@@ -1129,8 +1143,6 @@ var reSpnl = /^ *(?:\n *)?/;
 
 var reWhitespaceChar = /^[ \t\n\x0b\x0c\x0d]/;
 
-var reWhitespace = /[ \t\n\x0b\x0c\x0d]+/g;
-
 var reUnicodeWhitespaceChar = /^\s/;
 
 var reFinalSpace = / *$/;
@@ -1139,8 +1151,7 @@ var reInitialSpace = /^ */;
 
 var reSpaceAtEndOfLine = /^ *(?:\n|$)/;
 
-var reLinkLabel = new RegExp('^\\[(?:[^\\\\\\[\\]]|' + ESCAPED_CHAR +
-  '|\\\\){0,1000}\\]');
+var reLinkLabel = /^\[(?:[^\\\[\]]|\\.){0,1000}\]/;
 
 // Matches a string of non-special characters.
 var reMain = /^[^\n`\[\]\\!<&*_'"]+/m;
@@ -1199,12 +1210,21 @@ var parseBackticks = function(block) {
     var afterOpenTicks = this.pos;
     var matched;
     var node;
+    var contents;
     while ((matched = this.match(reTicks)) !== null) {
         if (matched === ticks) {
             node = new Node('code');
-            node._literal = this.subject.slice(afterOpenTicks,
+            contents = this.subject.slice(afterOpenTicks,
                                         this.pos - ticks.length)
-                          .trim().replace(reWhitespace, ' ');
+                          .replace(/\n/gm, ' ');
+            if (contents.length > 0 &&
+                contents.match(/[^ ]/) !== null &&
+                contents[0] == ' ' &&
+                contents[contents.length - 1] == ' ') {
+                node._literal = contents.slice(1, contents.length - 1);
+            } else {
+                node._literal = contents;
+            }
             block.appendChild(node);
             return true;
         }
@@ -1358,16 +1378,19 @@ var handleDelim = function(cc, block) {
     block.appendChild(node);
 
     // Add entry to stack for this opener
-    this.delimiters = { cc: cc,
-                        numdelims: numdelims,
-                        origdelims: numdelims,
-                        node: node,
-                        previous: this.delimiters,
-                        next: null,
-                        can_open: res.can_open,
-                        can_close: res.can_close };
-    if (this.delimiters.previous !== null) {
+    if ((res.can_open || res.can_close) &&
+        (this.options.smart || cc !== C_SINGLEQUOTE || cc !== C_DOUBLEQUOTE)){
+      this.delimiters = { cc: cc,
+                          numdelims: numdelims,
+                          origdelims: numdelims,
+                          node: node,
+                          previous: this.delimiters,
+                          next: null,
+                          can_open: res.can_open,
+                          can_close: res.can_close };
+      if (this.delimiters.previous !== null) {
         this.delimiters.previous.next = this.delimiters;
+      }
     }
 
     return true;
@@ -1400,14 +1423,15 @@ var processEmphasis = function(stack_bottom) {
     var use_delims;
     var tmp, next;
     var opener_found;
-    var openers_bottom = [];
+    var openers_bottom = [[],[],[]];
     var odd_match = false;
 
-    openers_bottom[C_UNDERSCORE] = stack_bottom;
-    openers_bottom[C_ASTERISK] = stack_bottom;
-    openers_bottom[C_SINGLEQUOTE] = stack_bottom;
-    openers_bottom[C_DOUBLEQUOTE] = stack_bottom;
-
+    for (var i=0; i < 3; i++) {
+        openers_bottom[i][C_UNDERSCORE] = stack_bottom;
+        openers_bottom[i][C_ASTERISK] = stack_bottom;
+        openers_bottom[i][C_SINGLEQUOTE] = stack_bottom;
+        openers_bottom[i][C_DOUBLEQUOTE] = stack_bottom;
+    }
     // find first closer above stack_bottom:
     closer = this.delimiters;
     while (closer !== null && closer.previous !== stack_bottom) {
@@ -1423,9 +1447,10 @@ var processEmphasis = function(stack_bottom) {
             opener = closer.previous;
             opener_found = false;
             while (opener !== null && opener !== stack_bottom &&
-                   opener !== openers_bottom[closercc]) {
+                   opener !== openers_bottom[closer.origdelims % 3][closercc]) {
                 odd_match = (closer.can_open || opener.can_close) &&
-                    (opener.origdelims + closer.origdelims) % 3 === 0;
+                     closer.origdelims % 3 !== 0 &&
+                     (opener.origdelims + closer.origdelims) % 3 === 0;
                 if (opener.cc === closer.cc && opener.can_open && !odd_match) {
                     opener_found = true;
                     break;
@@ -1501,13 +1526,9 @@ var processEmphasis = function(stack_bottom) {
                 closer = closer.next;
 
             }
-            if (!opener_found && !odd_match) {
+            if (!opener_found) {
                 // Set lower bound for future searches for openers:
-                // We don't do this with odd_match because a **
-                // that doesn't match an earlier * might turn into
-                // an opener, and the * might be matched by something
-                // else.
-                openers_bottom[closercc] = old_closer.previous;
+                openers_bottom[old_closer.origdelims % 3][closercc] = old_closer.previous;
                 if (!old_closer.can_open) {
                     // We can remove a closer that can't be an opener,
                     // once we've seen there's no matching opener:
@@ -1541,12 +1562,16 @@ var parseLinkTitle = function() {
 var parseLinkDestination = function() {
     var res = this.match(reLinkDestinationBraces);
     if (res === null) {
+        if (this.peek() === C_LESSTHAN) {
+            return null;
+        }
         // TODO handrolled parser; res should be null or the string
         var savepos = this.pos;
         var openparens = 0;
         var c;
         while ((c = this.peek()) !== -1) {
-            if (c === C_BACKSLASH) {
+            if (c === C_BACKSLASH
+                && reEscapable.test(this.subject.charAt(this.pos + 1))) {
                 this.pos += 1;
                 if (this.peek() !== -1) {
                     this.pos += 1;
@@ -1567,6 +1592,12 @@ var parseLinkDestination = function() {
                 this.pos += 1;
             }
         }
+        if (this.pos === savepos && c !== C_CLOSE_PAREN) {
+          return null;
+        }
+        if (openparens !== 0) {
+          return null;
+        }
         res = this.subject.substr(savepos, this.pos - savepos);
         return normalizeURI(unescapeString(res));
     } else {  // chop off surrounding <..>:
@@ -1577,9 +1608,7 @@ var parseLinkDestination = function() {
 // Attempt to parse a link label, returning number of characters parsed.
 var parseLinkLabel = function() {
     var m = this.match(reLinkLabel);
-    // Note:  our regex will allow something of form [..\];
-    // we disallow it here rather than using lookahead in the regex:
-    if (m === null || m.length > 1001 || /[^\\]\\\]$/.exec(m)) {
+    if (m === null || m.length > 1001) {
         return 0;
     } else {
         return m.length;
@@ -1854,14 +1883,16 @@ var parseReference = function(s, refmap) {
     this.spnl();
 
     dest = this.parseLinkDestination();
-    if (dest === null || dest.length === 0) {
+    if (dest === null) {
         this.pos = startpos;
         return 0;
     }
 
     var beforetitle = this.pos;
     this.spnl();
-    title = this.parseLinkTitle();
+    if (this.pos !== beforetitle) {
+        title = this.parseLinkTitle();
+    }
     if (title === null) {
         title = '';
         // rewind before spaces
@@ -2009,7 +2040,7 @@ function InlineParser(options){
 
 module.exports = InlineParser;
 
-},{"./common":2,"./from-code-point.js":3,"./node":6,"./normalize-reference":7,"entities":11,"string.prototype.repeat":21}],6:[function(require,module,exports){
+},{"./common":2,"./from-code-point.js":3,"./node":6,"./normalize-reference":7,"entities":11,"string.prototype.repeat":20}],6:[function(require,module,exports){
 "use strict";
 
 function isContainer(node) {
@@ -2088,6 +2119,7 @@ var Node = function(nodeType, sourcepos) {
     this._next = null;
     this._sourcepos = sourcepos;
     this._lastLineBlank = false;
+    this._lastLineChecked = false;
     this._open = true;
     this._string_content = null;
     this._literal = null;
@@ -2391,10 +2423,10 @@ function link(node, entering) {
   var attrs = this.attrs(node);
   if (entering) {
     if (!(this.options.safe && potentiallyUnsafe(node.destination))) {
-      attrs.push(['href', this.esc(node.destination, true)]);
+      attrs.push(['href', this.esc(node.destination)]);
     }
     if (node.title) {
-      attrs.push(['title', this.esc(node.title, true)]);
+      attrs.push(['title', this.esc(node.title)]);
     }
     this.tag('a', attrs);
   } else {
@@ -2408,7 +2440,7 @@ function image(node, entering) {
       if (this.options.safe && potentiallyUnsafe(node.destination)) {
         this.lit('<img src="" alt="');
       } else {
-        this.lit('<img src="' + this.esc(node.destination, true) +
+        this.lit('<img src="' + this.esc(node.destination) +
             '" alt="');
       }
     }
@@ -2417,7 +2449,7 @@ function image(node, entering) {
     this.disableTags -= 1;
     if (this.disableTags === 0) {
       if (node.title) {
-        this.lit('" title="' + this.esc(node.title, true));
+        this.lit('" title="' + this.esc(node.title));
       }
       this.lit('" />');
     }
@@ -2472,7 +2504,7 @@ function code_block(node) {
   var info_words = node.info ? node.info.split(/\s+/) : []
     , attrs = this.attrs(node);
   if (info_words.length > 0 && info_words[0].length > 0) {
-    attrs.push(['class', 'language-' + this.esc(info_words[0], true)]);
+    attrs.push(['class', 'language-' + this.esc(info_words[0])]);
   }
   this.cr();
   this.tag('pre');
@@ -2571,7 +2603,7 @@ function custom_block(node, entering) {
 /* Helper methods */
 
 function out(s) {
-  this.lit(this.esc(s, false));
+  this.lit(this.esc(s));
 }
 
 function attrs (node) {
@@ -3104,130 +3136,6 @@ module.exports={"amp":"&","apos":"'","gt":">","lt":"<","quot":"\""}
 'use strict';
 
 
-/* eslint-disable no-bitwise */
-
-var decodeCache = {};
-
-function getDecodeCache(exclude) {
-  var i, ch, cache = decodeCache[exclude];
-  if (cache) { return cache; }
-
-  cache = decodeCache[exclude] = [];
-
-  for (i = 0; i < 128; i++) {
-    ch = String.fromCharCode(i);
-    cache.push(ch);
-  }
-
-  for (i = 0; i < exclude.length; i++) {
-    ch = exclude.charCodeAt(i);
-    cache[ch] = '%' + ('0' + ch.toString(16).toUpperCase()).slice(-2);
-  }
-
-  return cache;
-}
-
-
-// Decode percent-encoded string.
-//
-function decode(string, exclude) {
-  var cache;
-
-  if (typeof exclude !== 'string') {
-    exclude = decode.defaultChars;
-  }
-
-  cache = getDecodeCache(exclude);
-
-  return string.replace(/(%[a-f0-9]{2})+/gi, function(seq) {
-    var i, l, b1, b2, b3, b4, chr,
-        result = '';
-
-    for (i = 0, l = seq.length; i < l; i += 3) {
-      b1 = parseInt(seq.slice(i + 1, i + 3), 16);
-
-      if (b1 < 0x80) {
-        result += cache[b1];
-        continue;
-      }
-
-      if ((b1 & 0xE0) === 0xC0 && (i + 3 < l)) {
-        // 110xxxxx 10xxxxxx
-        b2 = parseInt(seq.slice(i + 4, i + 6), 16);
-
-        if ((b2 & 0xC0) === 0x80) {
-          chr = ((b1 << 6) & 0x7C0) | (b2 & 0x3F);
-
-          if (chr < 0x80) {
-            result += '\ufffd\ufffd';
-          } else {
-            result += String.fromCharCode(chr);
-          }
-
-          i += 3;
-          continue;
-        }
-      }
-
-      if ((b1 & 0xF0) === 0xE0 && (i + 6 < l)) {
-        // 1110xxxx 10xxxxxx 10xxxxxx
-        b2 = parseInt(seq.slice(i + 4, i + 6), 16);
-        b3 = parseInt(seq.slice(i + 7, i + 9), 16);
-
-        if ((b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80) {
-          chr = ((b1 << 12) & 0xF000) | ((b2 << 6) & 0xFC0) | (b3 & 0x3F);
-
-          if (chr < 0x800 || (chr >= 0xD800 && chr <= 0xDFFF)) {
-            result += '\ufffd\ufffd\ufffd';
-          } else {
-            result += String.fromCharCode(chr);
-          }
-
-          i += 6;
-          continue;
-        }
-      }
-
-      if ((b1 & 0xF8) === 0xF0 && (i + 9 < l)) {
-        // 111110xx 10xxxxxx 10xxxxxx 10xxxxxx
-        b2 = parseInt(seq.slice(i + 4, i + 6), 16);
-        b3 = parseInt(seq.slice(i + 7, i + 9), 16);
-        b4 = parseInt(seq.slice(i + 10, i + 12), 16);
-
-        if ((b2 & 0xC0) === 0x80 && (b3 & 0xC0) === 0x80 && (b4 & 0xC0) === 0x80) {
-          chr = ((b1 << 18) & 0x1C0000) | ((b2 << 12) & 0x3F000) | ((b3 << 6) & 0xFC0) | (b4 & 0x3F);
-
-          if (chr < 0x10000 || chr > 0x10FFFF) {
-            result += '\ufffd\ufffd\ufffd\ufffd';
-          } else {
-            chr -= 0x10000;
-            result += String.fromCharCode(0xD800 + (chr >> 10), 0xDC00 + (chr & 0x3FF));
-          }
-
-          i += 9;
-          continue;
-        }
-      }
-
-      result += '\ufffd';
-    }
-
-    return result;
-  });
-}
-
-
-decode.defaultChars   = ';/?:@&=+$,#';
-decode.componentChars = '';
-
-
-module.exports = decode;
-
-},{}],20:[function(require,module,exports){
-
-'use strict';
-
-
 var encodeCache = {};
 
 
@@ -3323,7 +3231,7 @@ encode.componentChars = "-_.!~*'()";
 
 module.exports = encode;
 
-},{}],21:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /*! http://mths.be/repeat v0.2.0 by @mathias */
 if (!String.prototype.repeat) {
 	(function() {

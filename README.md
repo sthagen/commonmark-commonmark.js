@@ -32,28 +32,34 @@ You can install the library using `npm`:
 This package includes the commonmark library and a
 command-line executable, `commonmark`.
 
-For client-side use, you can do `make dist` to produce
-a standalone JavaScript file `js/dist/commonmark.js`,
-suitable for linking into a web page, or fetch the latest
-from
+For client-side use, fetch the latest from
 <https://raw.githubusercontent.com/jgm/commonmark.js/master/dist/commonmark.js>,
 or `bower install commonmark`.
 
+Building
+--------
+
+Make sure to fetch dependencies with:
+
+    npm install
+
+To build standalone JavaScript files (`dist/commonmark.js` and
+`dist/commonmark.min.js`):
+
+    make dist
+
 To run tests for the JavaScript library:
 
-    npm install # if needed to fetch dependencies
     make test
 
 To run benchmarks against some other JavaScript converters:
 
-    npm install benchmark showdown marked markdown-it
     make bench
 
 To start an interactive dingus that you can use to try out
 the library:
 
     make dingus
-
 
 Usage
 -----
@@ -78,24 +84,31 @@ The constructors for `Parser` and `HtmlRenderer` take an optional
 `options` parameter:
 
 ``` js
+var reader = new commonmark.Parser({smart: true});
 var writer = new commonmark.HtmlRenderer({sourcepos: true});
 ```
 
-The following options are currently supported:
+`Parser` currently supports the following:
+
+- `smart`:  if `true`, straight quotes will be made curly, `--` will
+  be changed to an en dash, `---` will be changed to an em dash, and
+  `...` will be changed to ellipses.
+
+Both `HtmlRenderer` and `XmlRenderer` (see below) support these options:
 
 - `sourcepos`:  if `true`, source position information for block-level
   elements will be rendered in the `data-sourcepos` attribute (for
   HTML) or the `sourcepos` attribute (for XML).
-- `smart`:  if `true`, straight quotes will be made curly, `--` will
-  be changed to an en dash, `---` will be changed to an em dash, and
-  `...` will be changed to ellipses.
 - `safe`: if `true`, raw HTML will not be passed through to HTML
   output (it will be replaced by comments), and potentially unsafe
   URLs in links and images (those beginning with `javascript:`,
   `vbscript:`, `file:`, and with a few exceptions `data:`) will
   be replaced with empty strings.
 - `softbreak`: specify raw string to be used for a softbreak.
-- `esc`: specify a function to be used to escape strings.
+- `esc`: specify a function to be used to escape strings.  Its
+  first argument is the string to be escaped, the second argument
+  is a boolean indicating whether to preserves entities in that
+  string.
 
 For example, to make soft breaks render as hard breaks in HTML:
 
@@ -109,12 +122,7 @@ To make them render as spaces:
 var writer = new commonmark.HtmlRenderer({softbreak: " "});
 ```
 
-To override `esc`, pass it a function with two parameters:
-the first is the string to be escaped, the second is a boolean
-that is `true` if entities in the string to be escaped should
-be preserved.
-
-In addition to the `HtmlRenderer`, there is an `XmlRenderer`, which
+`XmlRenderer` serves as an alternative to `HtmlRenderer` and
 will produce an XML representation of the AST:
 
 ``` js
@@ -264,7 +272,7 @@ a hundred times faster than Python Markdown, and more than
 a thousand times faster than `Markdown.pl`.
 
 Here are some focused benchmarks of four JavaScript libraries
-(using versions available on 24 Jan 2015). They test performance
+(using versions available on 24 Jan 2015).  They test performance
 on different kinds of Markdown texts.  (Most of these samples
 are taken from the
 [markdown-it](https://github.com/markdown-it/markdown-it)
@@ -329,12 +337,9 @@ markdown-it 5.0.2, node 5.3.0.  Hardware: 1.6GHz Intel Core i5, Mac OSX.
 [inline-backticks.md]: bench/samples/inline-backticks.md
 [block-ref-flat.md]: bench/samples/block-ref-flat.md
 
-To generate this table,
+To generate this table:
 
-    npm install showdown marked markdown-it benchmark
     make bench-detailed
-
-
 
 Authors
 -------

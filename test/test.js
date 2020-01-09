@@ -191,6 +191,18 @@ for (x = 1000; x <= 10000; x *= 10) {
           input: repeat('_a ', x),
           expected: '<p>' + repeat('_a ', x - 1) + '_a</p>\n' });
 }
+for (x=1000; x <= 10000; x *= 10) {
+    cases.push(
+        { name: x + ' openers and closers multiple of 3',
+          input: "a**b" + repeat("c* ", x),
+          expected: '<p>a**b' + repeat('c* ', x - 1) + 'c*</p>\n' });
+}
+for (x=1000; x <= 10000; x *= 10) {
+    cases.push(
+        { name: x + ' #172',
+          input: repeat('*_* _ ', x),
+          expected: '<p>' + repeat('<em>_</em> _ ', x - 1) + '<em>_</em> _</p>\n' });
+}
 for (x = 1000; x <= 10000; x *= 10) {
     cases.push(
         { name: x + ' link closers with no openers',
@@ -217,6 +229,12 @@ for (x = 1000; x <= 10000; x *= 10) {
 }
 for (x = 1000; x <= 10000; x *= 10) {
     cases.push(
+        { name: x + ' pattern [ (](',
+          input: repeat('[ (](', x),
+          expected: '<p>' + repeat('[ (](', x) + '</p>\n' });
+}
+for (x = 1000; x <= 10000; x *= 10) {
+    cases.push(
         { name: 'nested brackets ' + x + ' deep',
           input: repeat('[', x) + 'a' + repeat(']', x),
           expected: '<p>' + repeat('[', x) + 'a' + repeat(']', x) +
@@ -229,7 +247,21 @@ for (x = 1000; x <= 10000; x *= 10) {
           expected: repeat('<blockquote>\n', x) + '<p>a</p>\n' +
           repeat('</blockquote>\n', x) });
 }
-
+for (x = 1000; x <= 10000; x *= 10) {
+    cases.push(
+        { name: '[\\\\... ' + x + ' deep',
+          input: '[' + repeat('\\', x) + '\n',
+          expected: '<p>' + '[' + repeat('\\', x/2) + '</p>\n'
+        });
+}
+// Commented out til we have a fix... see #129
+// for (x = 1000; x <= 10000; x *= 10) {
+//     cases.push(
+//         { name: '[]( ' + x + ' deep',
+//           input: repeat('[](', x) + '\n',
+//           expected: '<p>' + repeat('[](', x) + '</p>\n'
+//         });
+// }
 var parse_and_render = function(z) {
     return writer.render(reader.parse(z));
 };
