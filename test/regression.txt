@@ -625,3 +625,10 @@ A dotless i reference does not resolve against an ASCII I definition
 .
 <p>[ı]</p>
 ````````````````````````````````
+Entities inside autolinks (#263).
+
+```````````````````````````````` example
+<http://&gt;>
+.
+<p><a href="http://%3E">http://&gt;</a></p>
+````````````````````````````````
